@@ -1,0 +1,13 @@
+MONDE INFO - MISE EN LIGNE (une seule fois, environ 10 minutes, gratuit)
+
+1. Crée un compte gratuit sur github.com.
+2. Crée un nouveau dépôt (New repository), nom : monde-info, public.
+3. Envoie-y tous les fichiers de ce dossier (Add file > Upload files).
+   Attention : le dossier caché .github/workflows/maj.yml doit être envoyé aussi.
+4. Settings > Pages : Source = "Deploy from a branch", Branch = main, dossier / (root).
+5. Onglet Actions : clique sur "Mise à jour des infos" puis "Run workflow".
+6. Ton appli est à l'adresse : https://TON-PSEUDO.github.io/monde-info/
+   Elle se met à jour toute seule toutes les 30 minutes.
+
+Ajouter un pays : dans build.py, copie le bloc FRANCE, change les flux RSS et les villes.
+Changer les catégories automatiques : modifie la liste RULES dans build.py.

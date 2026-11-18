@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Monde Info</title>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--ink:#14213d;--mute:#5d677d;--line:#dde1e9;--blue:#1d3fbf;--red:#d7263d;--up:#12805c}
+@media(prefers-color-scheme:dark){:root{--bg:#0e1424;--card:#172038;--ink:#eef1f8;--mute:#9aa5bf;--line:#2a3554;--blue:#7b97ff;--red:#ff6b7f;--up:#4cd6a3}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,sans-serif;line-height:1.45}
+main{max-width:600px;margin:0 auto;padding:max(16px,env(safe-area-inset-top)) 14px 48px}
+h1{margin:0;font-size:1.9rem;letter-spacing:-.02em}.sub{color:var(--mute);margin:2px 0 12px;font-size:.88rem}
+.bar{display:flex;height:5px;border-radius:3px;overflow:hidden;margin-bottom:14px}.bar i{flex:1}.bar i:nth-child(1){background:var(--blue)}.bar i:nth-child(2){background:var(--line)}.bar i:nth-child(3){background:var(--red)}
+.live{display:flex;gap:8px;overflow-x:auto;margin-bottom:12px;scrollbar-width:none}
+.pill{flex:none;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:.85rem}
+.pill b{display:block;font-size:1rem}.up{color:var(--up)}.down{color:var(--red)}
+input{font:inherit;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%;margin-bottom:10px}
+#tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.chip{font:inherit;color:inherit;cursor:pointer;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 12px;font-size:.85rem;font-weight:600}
+.chip[aria-pressed=true]{background:var(--blue);border-color:var(--blue);color:#fff}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+a.card{display:block;text-decoration:none;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:9px}
+.card h3{margin:0 0 4px;font-size:1rem;line-height:1.3}.meta{color:var(--mute);font-size:.8rem}
+.empty{border:2px dashed var(--line);border-radius:14px;padding:22px;text-align:center;color:var(--mute)}
+</style></head><body><main>
+<h1>Monde Info</h1><p class="sub" id="sub">Chargement…</p>
+<div class="bar"><i></i><i></i><i></i></div>
+<div class="live" id="live"></div>
+<input id="q" type="search" placeholder="Rechercher une info" aria-label="Rechercher">
+<div id="tabs"></div><div id="list"></div>
+</main>
+<script>
+var CATS=[["tout","Tout"],["une","À la une"],["pres","Président"],["polit","Politique"],["elec","Présidentielle"],["eco","Économie"],["crise","Crise économique"],["crypto","Crypto"],["bourse","Bourse"],["sante","Santé"],["medic","Médical"],["meteo","Météo"],["catas","Catastrophes"],["accid","Accidents"],["faits","Faits divers"],["secu","Sécurité"],["inter","International"],["envi","Environnement"],["energie","Énergie"],["trans","Transports"],["tech","Sciences et tech"],["sport","Sport"],["culture","Culture et médias"],["educ","Éducation"],["societ","Société"]];
+var D={items:[]},cur="tout";
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function ago(iso){var m=Math.round((Date.now()-new Date(iso))/60000);if(m<1)return"à l’instant";if(m<60)return"il y a "+m+" min";var h=Math.round(m/60);if(h<24)return"il y a "+h+" h";return"il y a "+Math.round(h/24)+" j"}
+function tabs(){var n={};D.items.forEach(function(i){n[i.c]=(n[i.c]||0)+1});
+ document.getElementById("tabs").innerHTML=CATS.map(function(c){var k=c[0]==="tout"?D.items.length:(n[c[0]]||0);return'<button class="chip" aria-pressed="'+(c[0]===cur)+'" data-id="'+c[0]+'">'+c[1]+(k?" ("+k+")":"")+'</button>'}).join("");
+ document.querySelectorAll("#tabs button").forEach(function(b){b.onclick=function(){cur=b.dataset.id;render()}})}
+function render(){tabs();var q=document.getElementById("q").value.toLowerCase();
+ var it=D.items.filter(function(i){return(cur==="tout"||i.c===cur)&&(!q||i.t.toLowerCase().indexOf(q)>-1)});
+ var cn=CATS.filter(function(c){return c[0]===cur})[0][1];
+ document.getElementById("list").innerHTML=it.length?it.map(function(i){return'<a class="card" href="'+esc(i.u)+'" target="_blank" rel="noopener"><h3>'+esc(i.t)+'</h3><div class="meta">'+esc(i.s)+' – '+ago(i.d)+'</div></a>'}).join(""):'<div class="empty">Aucune info pour « '+esc(cn)+' » en ce moment.</div>'}
+function live(){var h="";
+ (D.crypto||[]).forEach(function(c){h+='<div class="pill">'+esc(c.nom)+'<b>'+c.eur.toLocaleString("fr-FR")+' €</b><span class="'+(c["var"]>=0?"up":"down")+'">'+(c["var"]>=0?"+":"")+c["var"]+' % (24 h)</span></div>'});
+ (D.meteo||[]).forEach(function(m){h+='<div class="pill">'+esc(m.ville)+'<b>'+m.temp+' °C</b>'+esc(m.ciel)+', '+m.vent+' km/h</div>'});
+ document.getElementById("live").innerHTML=h}
+fetch("news.json?"+Date.now()).then(function(r){return r.json()}).then(function(d){D=d;
+ document.getElementById("sub").textContent=d.country+(d.updated?" – mis à jour "+ago(d.updated):"");live();render()})
+ .catch(function(){document.getElementById("sub").textContent="Impossible de charger les infos."});
+document.getElementById("q").oninput=render;
+</script></body></html>
