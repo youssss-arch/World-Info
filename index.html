@@ -11,7 +11,8 @@
 :root{--ink:#eef1fb;--mute:#a3aed0;--blue:#7d96ff;--red:#ff6f84;--card:rgba(13,19,42,.86);--line:rgba(255,255,255,.16)}
 *{box-sizing:border-box}
 html,body{height:100%;margin:0;background:#05060f;color:var(--ink);font-family:'Schibsted Grotesk',system-ui,-apple-system,'Segoe UI',sans-serif;overflow:hidden;-webkit-text-size-adjust:100%}
-#globe{position:fixed;inset:0;cursor:grab}
+#sky,#twk{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;display:none}
+#globe{position:fixed;inset:0;z-index:1;cursor:grab}
 #globe:active{cursor:grabbing}
 .top{position:fixed;left:0;right:0;top:0;z-index:10;display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;padding:max(14px,env(safe-area-inset-top)) 16px 8px;pointer-events:none}
 .top>*{pointer-events:auto}
@@ -54,13 +55,14 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
  .hint{left:28px;bottom:28px}
 }
 </style></head><body>
+<canvas id="sky"></canvas><canvas id="twk"></canvas>
 <div id="globe" aria-label="Globe interactif"></div>
 <div class="top">
  <div class="logo"><div class="flag"><i></i><i></i><i></i></div>Monde Info</div>
  <div class="sbox"><input id="q" type="search" placeholder="Chercher un pays…" aria-label="Chercher un pays" autocomplete="off"><div id="sug" role="listbox"></div></div>
 </div>
 <div class="panel" id="panel" role="dialog" aria-label="Infos du pays"></div>
-<div class="hint" id="hint"><b>Fais tourner le globe</b> et clique sur un pays.<br><span id="quakes">Disponible pour l’instant : la France. Les autres pays arrivent.</span></div>
+<div class="hint" id="hint"><b>Fais tourner, zoome</b> (molette ou deux doigts) et clique sur un pays.<br><span id="quakes">Disponible pour l’instant : la France. Les autres pays arrivent.</span></div>
 <div id="err"><div><h2>Le globe n’a pas pu se charger</h2><p>Vérifie ta connexion ou essaie un autre navigateur.</p><p><a href="france.html">Ouvrir directement la France →</a></p></div></div>
 <noscript><p style="position:fixed;top:80px;left:16px">Active JavaScript pour voir le globe. <a href="france.html" style="color:#7d96ff">Ouvrir la France</a></p></noscript>
 <script src="https://cdn.jsdelivr.net/npm/globe.gl@2/dist/globe.gl.min.js" onerror="window.__noglobe=1"></script>
@@ -82,9 +84,10 @@ function center(f){
  polys.forEach(function(pl){var r=pl[0],x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;r.forEach(function(c){if(c[0]<x0)x0=c[0];if(c[0]>x1)x1=c[0];if(c[1]<y0)y0=c[1];if(c[1]>y1)y1=c[1]});var a=(x1-x0)*(y1-y0);if(a>ba){ba=a;best={lat:(y0+y1)/2,lng:(x0+x1)/2}}});
  best.alt=0.8+Math.min(1.5,Math.sqrt(Math.max(ba,0))/35);return best}
 function cap(f){
- if(isFR(f))return f===sel?"rgba(120,150,255,.97)":f===hov?"rgba(110,140,255,.92)":"rgba(60,95,245,.75)";
- return f===sel?"rgba(255,255,255,.34)":f===hov?"rgba(255,255,255,.22)":"rgba(255,255,255,.06)"}
-function alt(f){return f===sel?.035:f===hov?.022:isFR(f)?.012:.006}
+ if(isFR(f))return f===sel?"rgba(70,110,255,.55)":f===hov?"rgba(70,110,255,.45)":"rgba(36,71,245,.28)";
+ return f===sel?"rgba(255,255,255,.26)":f===hov?"rgba(255,255,255,.15)":"rgba(255,255,255,0)"}
+function stroke(f){return isFR(f)?"rgba(160,190,255,.95)":"rgba(255,255,255,.3)"}
+function alt(f){return f===sel?.02:f===hov?.012:isFR(f)?.006:.003}
 function lab(f){return'<div style="font:600 13px system-ui,sans-serif;padding:6px 10px;background:rgba(10,15,33,.94);border-radius:8px;color:#fff">'+flag(f)+" "+esc(nm(f))+" – "+(isFR(f)?"disponible":"bientôt")+"</div>"}
 function repaint(){if(G)G.polygonCapColor(cap).polygonAltitude(alt)}
 function resume(){clearTimeout(idle);idle=setTimeout(function(){if(G&&!sel)G.controls().autoRotate=true},7000)}
@@ -118,15 +121,60 @@ el("q").onkeydown=function(e){
 document.addEventListener("click",function(e){if(!e.target.closest(".sbox"))el("sug").style.display="none"});
 addEventListener("keydown",function(e){if(e.key==="Escape"&&sel)closeP()});
 
+
+/* ---------- ciel étoilé ---------- */
+function rng(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+var SKY={tw:[],w:0,h:0,dpr:1,on:false,last:0},reduce=false;
+try{reduce=matchMedia("(prefers-reduced-motion: reduce)").matches}catch(e){}
+function buildSky(){
+ var cv=el("sky"),tc=el("twk"),dpr=Math.min(window.devicePixelRatio||1,2),w=innerWidth,h=innerHeight;
+ SKY.w=w;SKY.h=h;SKY.dpr=dpr;
+ [cv,tc].forEach(function(c){c.width=Math.round(w*dpr);c.height=Math.round(h*dpr);c.style.display="block"});
+ var x=cv.getContext("2d");x.setTransform(dpr,0,0,dpr,0,0);
+ var g=x.createRadialGradient(w*.5,h*.45,0,w*.5,h*.45,Math.max(w,h)*.78);
+ g.addColorStop(0,"#0b1330");g.addColorStop(.55,"#050918");g.addColorStop(1,"#02030a");x.fillStyle=g;x.fillRect(0,0,w,h);
+ x.save();x.translate(w*.5,h*.5);x.rotate(-.5);
+ [[.24,"rgba(110,135,255,.10)"],[.13,"rgba(190,160,255,.08)"],[.06,"rgba(255,228,200,.07)"]].forEach(function(b){
+  var gg=x.createLinearGradient(0,-h*b[0],0,h*b[0]);gg.addColorStop(0,"rgba(0,0,0,0)");gg.addColorStop(.5,b[1]);gg.addColorStop(1,"rgba(0,0,0,0)");
+  x.fillStyle=gg;x.fillRect(-w,-h*b[0],w*2,h*b[0]*2)});
+ x.restore();
+ var R=rng(20261121),n=Math.round(w*h/1300),i,tints=["255,255,255","255,244,225","215,228,255","255,225,205"],ca=Math.cos(-.5),sa=Math.sin(-.5);
+ SKY.tw=[];
+ for(i=0;i<n;i++){
+  var px=R()*w,py=R()*h,yp=-(px-w/2)*sa+(py-h/2)*ca;
+  if(Math.abs(yp)>h*.33&&R()<.4)continue;
+  var r=.25+Math.pow(R(),6)*1.7,al=.3+R()*.7,t=tints[Math.floor(R()*4)];
+  if(r>1){var gl=x.createRadialGradient(px,py,0,px,py,r*5);gl.addColorStop(0,"rgba("+t+",.35)");gl.addColorStop(1,"rgba("+t+",0)");x.fillStyle=gl;x.fillRect(px-r*5,py-r*5,r*10,r*10)}
+  x.fillStyle="rgba("+t+","+al.toFixed(2)+")";x.beginPath();x.arc(px,py,r,0,6.2832);x.fill();
+  if(r>.75&&SKY.tw.length<70)SKY.tw.push({x:px,y:py,r:r,t:t,ph:R()*6.28,sp:.6+R()*1.6})}
+ if(!SKY.on&&!reduce){SKY.on=true;requestAnimationFrame(tickSky)}}
+function tickSky(ts){
+ requestAnimationFrame(tickSky);
+ if(document.hidden||ts-SKY.last<33)return;SKY.last=ts;
+ var c=el("twk").getContext("2d");c.setTransform(SKY.dpr,0,0,SKY.dpr,0,0);c.clearRect(0,0,SKY.w,SKY.h);
+ SKY.tw.forEach(function(s){var a=.15+.6*(.5+.5*Math.sin(ts/1000*s.sp+s.ph));c.fillStyle="rgba("+s.t+","+a.toFixed(2)+")";c.beginPath();c.arc(s.x,s.y,s.r*1.1,0,6.2832);c.fill()})}
+var rsz=null;addEventListener("resize",function(){clearTimeout(rsz);rsz=setTimeout(function(){if(SKY.w)buildSky()},200)});
+
+/* ---------- réglages après création du globe ---------- */
+function afterInit(c){
+ try{var r=G.renderer();r.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+  if(typeof r.getClearAlpha==="function"&&r.getClearAlpha()===0)buildSky();else G.backgroundImageUrl(IMG+"night-sky.png")}
+ catch(e){try{G.backgroundImageUrl(IMG+"night-sky.png")}catch(_){}}
+ try{if(typeof G.globeTileEngineUrl==="function"){
+   G.globeTileEngineUrl(function(x,y,l){return"https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief_Bathymetry/default/GoogleMapsCompatible_Level8/"+l+"/"+y+"/"+x+".jpeg"});
+   if(typeof G.globeTileEngineMaxLevel==="function")G.globeTileEngineMaxLevel(8)}}catch(e){}
+ try{c.minDistance=118;c.maxDistance=520;c.dampingFactor=.07;c.zoomSpeed=.7;c.rotateSpeed=.8;
+  c.addEventListener("change",function(){var d=G.camera().position.length();c.rotateSpeed=Math.max(.12,Math.min(.9,(d-100)/230))})}catch(e){}}
+
 function initGlobe(){
  if(typeof Globe!=="function"){el("err").style.display="grid";return}
  try{
-  G=Globe({animateIn:true})(el("globe"))
+  G=Globe({animateIn:true,rendererConfig:{antialias:true,alpha:true,powerPreference:"high-performance"}})(el("globe"))
    .width(innerWidth).height(innerHeight)
-   .globeImageUrl(IMG+"earth-night.jpg").bumpImageUrl(IMG+"earth-topology.png").backgroundImageUrl(IMG+"night-sky.png")
-   .atmosphereColor("#7d96ff").atmosphereAltitude(.2)
+   .globeImageUrl(IMG+"earth-blue-marble.jpg").bumpImageUrl(IMG+"earth-topology.png").backgroundColor("rgba(0,0,0,0)")
+   .atmosphereColor("#7fb2ff").atmosphereAltitude(.22)
    .polygonsData(feats.filter(function(f){return f.geometry}))
-   .polygonCapColor(cap).polygonSideColor(function(){return"rgba(255,255,255,.04)"}).polygonStrokeColor(function(){return"rgba(255,255,255,.3)"})
+   .polygonCapColor(cap).polygonSideColor(function(){return"rgba(255,255,255,.03)"}).polygonStrokeColor(stroke)
    .polygonAltitude(alt).polygonLabel(lab).polygonsTransitionDuration(250)
    .onPolygonHover(function(f){hov=f;repaint();el("globe").style.cursor=f?"pointer":"grab"})
    .onPolygonClick(pick)
@@ -137,7 +185,7 @@ function initGlobe(){
   var c=G.controls();c.autoRotate=true;c.autoRotateSpeed=.45;c.enableDamping=true;
   c.addEventListener("start",function(){c.autoRotate=false;clearTimeout(idle)});
   c.addEventListener("end",resume);
-  G.pointOfView({lat:30,lng:10,altitude:2.4});
+  G.pointOfView({lat:30,lng:10,altitude:1.9});afterInit(c);
   addEventListener("resize",function(){G.width(innerWidth).height(innerHeight)});
  }catch(e){el("err").style.display="grid"}}
 function loadGeo(i){
