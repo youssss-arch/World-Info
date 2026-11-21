@@ -44,6 +44,7 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
 #tip{position:fixed;z-index:9;pointer-events:none;display:none;font:600 13px system-ui,sans-serif;padding:6px 10px;background:rgba(10,15,33,.94);border-radius:8px;color:#fff;white-space:nowrap}
 .hint{position:fixed;z-index:5;left:16px;bottom:max(16px,env(safe-area-inset-bottom));color:var(--mute);font-size:.85rem;line-height:1.5;text-shadow:0 1px 8px #000;pointer-events:none}
 .hint b{color:var(--ink)}
+#qbtn{pointer-events:auto;font:inherit;font-size:.8rem;color:var(--blue);background:none;border:0;padding:0;cursor:pointer;text-decoration:underline}
 .panel.on~.hint{display:none}
 #err{position:fixed;z-index:20;inset:0;display:none;place-items:center;text-align:center;padding:24px;background:#05060f}
 #err a{color:var(--blue)}
@@ -64,7 +65,7 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
 </div>
 <div id="tip"></div>
 <div class="panel" id="panel" role="dialog" aria-label="Infos du pays"></div>
-<div class="hint" id="hint"><b>Fais tourner, zoome</b> (molette ou deux doigts) et clique sur un pays.<br><span id="quakes">Disponible pour l’instant : la France. Les autres pays arrivent.</span></div>
+<div class="hint" id="hint"><b>Fais tourner, zoome</b> (molette ou deux doigts) et clique sur un pays.<br><span id="quakes">Disponible pour l’instant : la France. Les autres pays arrivent.</span><br><span id="qual"></span> <button id="qbtn" hidden>Réessayer la haute qualité</button></div>
 <div id="err"><div><h2>Le globe n’a pas pu se charger</h2><p>Vérifie ta connexion ou essaie un autre navigateur.</p><p><a href="france.html">Ouvrir directement la France →</a></p></div></div>
 <noscript><p style="position:fixed;top:80px;left:16px">Active JavaScript pour voir le globe. <a href="france.html" style="color:#7d96ff">Ouvrir la France</a></p></noscript>
 <script src="https://cdn.jsdelivr.net/npm/globe.gl@2/dist/globe.gl.min.js" onerror="window.__noglobe=1"></script>
@@ -165,7 +166,7 @@ function afterInit(c){
  catch(e){try{G.backgroundImageUrl(IMG+"night-sky.png")}catch(_){}}
  try{if(typeof G.globeTileEngineUrl==="function"){
    G.globeTileEngineUrl(function(x,y,l){return"https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief_Bathymetry/default/GoogleMapsCompatible_Level8/"+l+"/"+y+"/"+x+".jpeg"});
-   if(typeof G.globeTileEngineMaxLevel==="function")G.globeTileEngineMaxLevel(8)}}catch(e){}
+   if(typeof G.globeTileEngineMaxLevel==="function")G.globeTileEngineMaxLevel(8);TILES=true}}catch(e){}
  try{c.minDistance=118;c.maxDistance=520;c.dampingFactor=.07;c.zoomSpeed=.7;c.rotateSpeed=.8;
   c.addEventListener("change",function(){var d=G.camera().position.length();c.rotateSpeed=Math.max(.12,Math.min(.9,(d-100)/230))})}catch(e){}}
 
@@ -219,17 +220,41 @@ function simplify(fs,tol){
   f.__p=null});return fs}
 
 /* ---------- garde-fou : si l'affichage est trop lent, on allège tout seul ---------- */
-var LOD=null,slow=false;
+var LOD=null,slow=false,HIS="attente",TILES=false,guarded=false;
+function updateQual(){
+ var q=el("qual");if(!q)return;
+ q.textContent="Frontières : "+(HIS==="ok"?"précises":HIS==="chargement"?"chargement…":"simples")+" – Satellite : "+(TILES?"HD":"standard")+(slow?" – mode léger":"");
+ var b=el("qbtn");if(b){b.hidden=!(HIS==="échec"||HIS==="allégé"||slow);b.onclick=retryHigh}}
 function degrade(){
- if(slow)return;slow=true;
+ if(slow)return;slow=true;HIS="allégé";
  try{G.renderer().setPixelRatio(1)}catch(e){}
  SKY.off=true;try{el("twk").style.display="none"}catch(e){}
- try{if(typeof G.globeTileEngineUrl==="function")G.globeTileEngineUrl(null)}catch(e){}
  try{G.atmosphereAltitude(.15)}catch(e){}
- if(LOD)setFeats(LOD,true)}
+ if(LOD)setFeats(LOD,true);updateQual()}
+function retryHigh(){
+ slow=false;guarded=false;
+ try{G.renderer().setPixelRatio(Math.min(window.devicePixelRatio||1,2))}catch(e){}
+ SKY.off=false;try{el("twk").style.display="block"}catch(e){}
+ try{G.atmosphereAltitude(.22)}catch(e){}
+ HIS="chargement";updateQual();
+ fetchFirst(GEO_HI,0,swapProgressive,function(){HIS="échec";updateQual()})}
 function perfGuard(){
- setTimeout(function(){var n=0,t0=0,sum=0;
-  requestAnimationFrame(function f(ts){if(t0){sum+=ts-t0;n++}t0=ts;if(n<90)return requestAnimationFrame(f);if(sum/n>42)degrade()})},4500)}
+ if(guarded||slow)return;guarded=true;
+ setTimeout(function(){var ds=[],t0=0;
+  requestAnimationFrame(function f(ts){if(t0)ds.push(ts-t0);t0=ts;if(ds.length<90)return requestAnimationFrame(f);
+   ds.sort(function(x,y){return x-y});if(ds[45]>70)degrade()})},3000)}
+function swapProgressive(d){
+ var hi=d.features.filter(function(f){return f.properties&&f.properties.ADMIN!=="Antarctica"});
+ simplify(hi,.02);
+ var keep=sel&&sel.properties&&sel.properties.ADMIN,names={},i=0,STEP=24,lo=feats;
+ (function step(){
+  if(slow)return;
+  var part=hi.slice(0,i+STEP);i+=STEP;
+  part.forEach(function(f){names[f.properties.ADMIN]=1});
+  feats=i>=hi.length?hi:part.concat(lo.filter(function(f){return!names[f.properties.ADMIN]}));
+  sel=keep?(feats.filter(function(f){return f.properties.ADMIN===keep})[0]||null):null;hov=null;
+  if(G){G.polygonsData(feats);repaint()}
+  if(i<hi.length)setTimeout(step,60);else{HIS="ok";updateQual();perfGuard()}})()}
 
 function initGlobe(){
  if(typeof Globe!=="function"){el("err").style.display="grid";return}
@@ -250,7 +275,7 @@ function initGlobe(){
   G.pointOfView({lat:30,lng:10,altitude:1.9});afterInit(c);
   if(typeof G.toGlobeCoords==="function")ownPicking();
   else G.polygonLabel(lab).onPolygonHover(function(f){hov=f;repaint()}).onPolygonClick(pick).onGlobeClick(function(){if(sel)closeP()});
-  perfGuard();
+  updateQual();
   addEventListener("resize",function(){G.width(innerWidth).height(innerHeight)});
  }catch(e){el("err").style.display="grid"}}
 function fetchFirst(urls,i,ok,fail){
@@ -265,7 +290,10 @@ function setFeats(d,keepLow){
  if(G){G.polygonsData(feats);repaint()}}
 function loadGeo(){
  var save=false;try{save=!!(navigator.connection&&navigator.connection.saveData)}catch(e){}
- var up=function(){if(!save&&!slow)fetchFirst(GEO_HI,0,function(d){if(!slow){d.__hi=1;setFeats(d)}})};
+ var up=function(){
+  if(save){HIS="économie";updateQual();perfGuard();return}
+  HIS="chargement";updateQual();
+  fetchFirst(GEO_HI,0,function(d){if(!slow)swapProgressive(d)},function(){HIS="échec";updateQual();perfGuard()})};
  fetchFirst(GEO_LO,0,function(d){LOD=JSON.parse(JSON.stringify(d));setFeats(d);up()},up)}
 function loadQuakes(){
  fetch("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson").then(function(r){return r.json()}).then(function(d){
