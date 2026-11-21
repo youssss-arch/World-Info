@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Monde Info – Le monde en direct</title>
+<meta name="theme-color" content="#05060f">
+<meta name="description" content="Monde Info : un globe interactif pour suivre les infos de chaque pays. France disponible, les autres pays arrivent.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 100 100%27%3E%3Ctext y=%27.9em%27 font-size=%2790%27%3E🌍%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#eef1fb;--mute:#a3aed0;--blue:#7d96ff;--red:#ff6f84;--card:rgba(13,19,42,.86);--line:rgba(255,255,255,.16)}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:#05060f;color:var(--ink);font-family:'Schibsted Grotesk',system-ui,-apple-system,'Segoe UI',sans-serif;overflow:hidden;-webkit-text-size-adjust:100%}
+#globe{position:fixed;inset:0;cursor:grab}
+#globe:active{cursor:grabbing}
+.top{position:fixed;left:0;right:0;top:0;z-index:10;display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;padding:max(14px,env(safe-area-inset-top)) 16px 8px;pointer-events:none}
+.top>*{pointer-events:auto}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:1.4rem;letter-spacing:-.03em;text-shadow:0 2px 12px rgba(0,0,0,.6)}
+.flag{display:flex;width:30px;height:22px;border-radius:5px;overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.3)}
+.flag i{flex:1}.flag i:nth-child(1){background:#2447f5}.flag i:nth-child(2){background:#fff}.flag i:nth-child(3){background:#e5334b}
+.sbox{position:relative;flex:1 1 100%;order:3}
+input{font:inherit;color:var(--ink);width:100%;background:var(--card);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--line);border-radius:14px;padding:13px 16px;font-size:1rem}
+input::placeholder{color:var(--mute)}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+#sug{position:absolute;left:0;right:0;top:100%;margin-top:6px;background:var(--card);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--line);border-radius:14px;overflow:auto;max-height:50vh;display:none}
+#sug button{display:flex;align-items:center;gap:10px;width:100%;text-align:left;font:inherit;color:inherit;background:none;border:0;padding:11px 14px;cursor:pointer}
+#sug button:hover,#sug button.on{background:rgba(255,255,255,.09)}
+#sug .fl{font-size:1.3rem}
+#sug em{margin-left:auto;font-style:normal;font-size:.78rem;font-weight:700;border-radius:8px;padding:2px 8px;background:rgba(255,255,255,.1);color:var(--mute)}
+#sug em.ok{background:rgba(99,130,255,.3);color:#fff}
+.panel{position:fixed;z-index:10;left:16px;right:16px;bottom:max(16px,env(safe-area-inset-bottom));background:var(--card);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--line);border-radius:20px;padding:18px 18px 16px;display:none;max-height:55vh;overflow:auto}
+.panel.on{display:block}
+.ph{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.ph .fl{font-size:2.2rem;line-height:1}
+.ph b{display:block;font-size:1.35rem;font-weight:800;letter-spacing:-.02em}
+.ph small{color:var(--mute);font-size:.85rem}
+.ph button{margin-left:auto;font:inherit;font-size:1.2rem;color:var(--mute);background:none;border:0;cursor:pointer;padding:6px 8px}
+.hl{display:block;text-decoration:none;color:inherit;padding:9px 0;border-top:1px solid var(--line)}
+.hl span{display:block;font-weight:600;line-height:1.3}
+.hl small{color:var(--mute);font-size:.8rem}
+.go{display:block;text-align:center;text-decoration:none;font-weight:800;color:#fff;background:#2447f5;border-radius:12px;padding:13px;margin-top:12px}
+.soon{color:var(--mute);line-height:1.5;margin:4px 0 0}
+.hint{position:fixed;z-index:5;left:16px;bottom:max(16px,env(safe-area-inset-bottom));color:var(--mute);font-size:.85rem;line-height:1.5;text-shadow:0 1px 8px #000;pointer-events:none}
+.hint b{color:var(--ink)}
+.panel.on~.hint{display:none}
+#err{position:fixed;z-index:20;inset:0;display:none;place-items:center;text-align:center;padding:24px;background:#05060f}
+#err a{color:var(--blue)}
+@media(min-width:800px){
+ .top{flex-wrap:nowrap;padding:18px 28px}
+ .sbox{order:0;flex:0 1 560px;margin:0 auto}
+ .logo{flex:none;width:200px}
+ .top:after{content:"";flex:none;width:200px}
+ .panel{left:auto;right:28px;bottom:28px;width:400px;max-height:70vh}
+ .hint{left:28px;bottom:28px}
+}
+</style></head><body>
+<div id="globe" aria-label="Globe interactif"></div>
+<div class="top">
+ <div class="logo"><div class="flag"><i></i><i></i><i></i></div>Monde Info</div>
+ <div class="sbox"><input id="q" type="search" placeholder="Chercher un pays…" aria-label="Chercher un pays" autocomplete="off"><div id="sug" role="listbox"></div></div>
+</div>
+<div class="panel" id="panel" role="dialog" aria-label="Infos du pays"></div>
+<div class="hint" id="hint"><b>Fais tourner le globe</b> et clique sur un pays.<br><span id="quakes">Disponible pour l’instant : la France. Les autres pays arrivent.</span></div>
+<div id="err"><div><h2>Le globe n’a pas pu se charger</h2><p>Vérifie ta connexion ou essaie un autre navigateur.</p><p><a href="france.html">Ouvrir directement la France →</a></p></div></div>
+<noscript><p style="position:fixed;top:80px;left:16px">Active JavaScript pour voir le globe. <a href="france.html" style="color:#7d96ff">Ouvrir la France</a></p></noscript>
+<script src="https://cdn.jsdelivr.net/npm/globe.gl@2/dist/globe.gl.min.js" onerror="window.__noglobe=1"></script>
+<script>
+var IMG="https://cdn.jsdelivr.net/npm/three-globe/example/img/";
+var GEO=["https://cdn.jsdelivr.net/gh/vasturiano/globe.gl/example/datasets/ne_110m_admin_0_countries.geojson","https://raw.githubusercontent.com/vasturiano/globe.gl/master/example/datasets/ne_110m_admin_0_countries.geojson"];
+var FRF={type:"Feature",properties:{ADMIN:"France",NAME_FR:"France",ISO_A2:"FR"},geometry:null};
+var G=null,feats=[FRF],sel=null,hov=null,NEWS=null,idle=null,sugList=[],sugI=-1;
+var el=function(id){return document.getElementById(id)};
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function norm(s){return(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase()}
+function isFR(f){return f&&f.properties&&f.properties.ADMIN==="France"}
+function nm(f){var p=f.properties;return p.NAME_FR||p.NAME_EN||p.NAME||p.ADMIN||"?"}
+function flag(f){var c=isFR(f)?"FR":f.properties.ISO_A2;if(!c||c.length!==2)return"🌐";return String.fromCodePoint.apply(null,c.toUpperCase().split("").map(function(x){return 127397+x.charCodeAt(0)}))}
+function ago(iso){var m=Math.round((Date.now()-new Date(iso))/60000);if(m<1)return"à l’instant";if(m<60)return"il y a "+m+" min";var h=Math.round(m/60);if(h<24)return"il y a "+h+" h";return"il y a "+Math.round(h/24)+" j"}
+function center(f){
+ if(isFR(f)||!f.geometry)return{lat:46.6,lng:2.4,alt:1.25};
+ var g=f.geometry,polys=g.type==="Polygon"?[g.coordinates]:g.coordinates,best={lat:0,lng:0},ba=-1;
+ polys.forEach(function(pl){var r=pl[0],x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;r.forEach(function(c){if(c[0]<x0)x0=c[0];if(c[0]>x1)x1=c[0];if(c[1]<y0)y0=c[1];if(c[1]>y1)y1=c[1]});var a=(x1-x0)*(y1-y0);if(a>ba){ba=a;best={lat:(y0+y1)/2,lng:(x0+x1)/2}}});
+ best.alt=0.8+Math.min(1.5,Math.sqrt(Math.max(ba,0))/35);return best}
+function cap(f){
+ if(isFR(f))return f===sel?"rgba(120,150,255,.97)":f===hov?"rgba(110,140,255,.92)":"rgba(60,95,245,.75)";
+ return f===sel?"rgba(255,255,255,.34)":f===hov?"rgba(255,255,255,.22)":"rgba(255,255,255,.06)"}
+function alt(f){return f===sel?.035:f===hov?.022:isFR(f)?.012:.006}
+function lab(f){return'<div style="font:600 13px system-ui,sans-serif;padding:6px 10px;background:rgba(10,15,33,.94);border-radius:8px;color:#fff">'+flag(f)+" "+esc(nm(f))+" – "+(isFR(f)?"disponible":"bientôt")+"</div>"}
+function repaint(){if(G)G.polygonCapColor(cap).polygonAltitude(alt)}
+function resume(){clearTimeout(idle);idle=setTimeout(function(){if(G&&!sel)G.controls().autoRotate=true},7000)}
+function showPanel(f){
+ var p=el("panel"),h='<div class="ph"><span class="fl">'+flag(f)+'</span><div><b>'+esc(nm(f))+'</b><small>'+(isFR(f)?"Disponible":"Bientôt disponible")+'</small></div><button id="x" aria-label="Fermer">✕</button></div>';
+ if(isFR(f)){
+  var it=(NEWS&&NEWS.items||[]).slice(0,3);
+  h+=it.length?it.map(function(i){return'<a class="hl" href="'+(/^https?:\/\//.test(i.u)?esc(i.u):"#")+'" target="_blank" rel="noopener"><span>'+esc(i.t)+'</span><small>'+esc(i.s)+" – "+ago(i.d)+"</small></a>"}).join(""):'<p class="soon">Les gros titres arrivent dans un instant…</p>';
+  h+='<a class="go" href="france.html">Ouvrir Monde Info France →</a>'}
+ else h+='<p class="soon">Les infos de ce pays arrivent bientôt. On commence par la France, puis on ajoute les autres pays un par un.</p><a class="go" href="france.html">Voir les infos de la France →</a>';
+ p.innerHTML=h;p.className="panel on";el("x").onclick=closeP}
+function closeP(){sel=null;el("panel").className="panel";repaint();resume()}
+function pick(f){
+ if(!f)return;sel=f;var c=center(f);
+ if(G){G.controls().autoRotate=false;G.pointOfView({lat:c.lat,lng:c.lng,altitude:c.alt},1100)}
+ repaint();showPanel(f);el("sug").style.display="none";el("q").blur()}
+function suggest(){
+ var q=norm(el("q").value.trim()),s=el("sug");sugI=-1;
+ if(!q){s.style.display="none";sugList=[];return}
+ sugList=feats.filter(function(f){return norm(nm(f)).indexOf(q)>-1||norm(f.properties.NAME||"").indexOf(q)>-1})
+  .sort(function(a,b){var A=isFR(a)?0:norm(nm(a)).indexOf(q)===0?1:2,B=isFR(b)?0:norm(nm(b)).indexOf(q)===0?1:2;return A-B||nm(a).localeCompare(nm(b),"fr")}).slice(0,8);
+ s.innerHTML=sugList.length?sugList.map(function(f,i){return'<button data-i="'+i+'"><span class="fl">'+flag(f)+"</span><span>"+esc(nm(f))+'</span><em class="'+(isFR(f)?"ok":"")+'">'+(isFR(f)?"Disponible":"Bientôt")+"</em></button>"}).join(""):'<button disabled>Aucun pays trouvé</button>';
+ s.style.display="block";
+ s.querySelectorAll("button[data-i]").forEach(function(b){b.onclick=function(){pick(sugList[+b.dataset.i])}})}
+el("q").oninput=suggest;el("q").onfocus=suggest;
+el("q").onkeydown=function(e){
+ var bs=el("sug").querySelectorAll("button[data-i]");
+ if(e.key==="ArrowDown"||e.key==="ArrowUp"){e.preventDefault();if(!bs.length)return;sugI=(sugI+(e.key==="ArrowDown"?1:-1)+bs.length)%bs.length;bs.forEach(function(b,i){b.className=i===sugI?"on":""})}
+ else if(e.key==="Enter"){var f=sugList[sugI<0?0:sugI];if(f)pick(f)}
+ else if(e.key==="Escape"){el("sug").style.display="none";closeP()}};
+document.addEventListener("click",function(e){if(!e.target.closest(".sbox"))el("sug").style.display="none"});
+addEventListener("keydown",function(e){if(e.key==="Escape"&&sel)closeP()});
+
+function initGlobe(){
+ if(typeof Globe!=="function"){el("err").style.display="grid";return}
+ try{
+  G=Globe({animateIn:true})(el("globe"))
+   .width(innerWidth).height(innerHeight)
+   .globeImageUrl(IMG+"earth-night.jpg").bumpImageUrl(IMG+"earth-topology.png").backgroundImageUrl(IMG+"night-sky.png")
+   .atmosphereColor("#7d96ff").atmosphereAltitude(.2)
+   .polygonsData(feats.filter(function(f){return f.geometry}))
+   .polygonCapColor(cap).polygonSideColor(function(){return"rgba(255,255,255,.04)"}).polygonStrokeColor(function(){return"rgba(255,255,255,.3)"})
+   .polygonAltitude(alt).polygonLabel(lab).polygonsTransitionDuration(250)
+   .onPolygonHover(function(f){hov=f;repaint();el("globe").style.cursor=f?"pointer":"grab"})
+   .onPolygonClick(pick)
+   .onGlobeClick(function(){if(sel)closeP()})
+   .ringsData([{lat:46.6,lng:2.4,fr:1}])
+   .ringColor(function(d){return d.fr?function(t){return"rgba(120,150,255,"+(1-t)+")"}:function(t){return"rgba(255,111,132,"+(1-t)+")"}})
+   .ringMaxRadius(function(d){return d.fr?4:Math.max(1.6,d.mag*.9)}).ringPropagationSpeed(2).ringRepeatPeriod(1500);
+  var c=G.controls();c.autoRotate=true;c.autoRotateSpeed=.45;c.enableDamping=true;
+  c.addEventListener("start",function(){c.autoRotate=false;clearTimeout(idle)});
+  c.addEventListener("end",resume);
+  G.pointOfView({lat:30,lng:10,altitude:2.4});
+  addEventListener("resize",function(){G.width(innerWidth).height(innerHeight)});
+ }catch(e){el("err").style.display="grid"}}
+function loadGeo(i){
+ if(i>=GEO.length){return}
+ fetch(GEO[i]).then(function(r){return r.json()}).then(function(d){
+  feats=d.features.filter(function(f){return f.properties&&f.properties.ADMIN!=="Antarctica"});
+  if(G)G.polygonsData(feats)}).catch(function(){loadGeo(i+1)})}
+function loadQuakes(){
+ fetch("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson").then(function(r){return r.json()}).then(function(d){
+  var q=d.features.slice(0,40).map(function(f){return{lat:f.geometry.coordinates[1],lng:f.geometry.coordinates[0],mag:f.properties.mag||4.5}});
+  if(G)G.ringsData([{lat:46.6,lng:2.4,fr:1}].concat(q));
+  el("quakes").textContent="🌋 "+d.features.length+" séismes dans le monde (24 h) – disponible pour l’instant : la France."}).catch(function(){})}
+function loadNews(){fetch("news.json?"+Date.now()).then(function(r){return r.json()}).then(function(d){NEWS=d;if(sel&&isFR(sel))showPanel(sel)}).catch(function(){})}
+initGlobe();loadGeo(0);loadQuakes();loadNews();
+</script></body></html>
