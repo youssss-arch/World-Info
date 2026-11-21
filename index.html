@@ -41,6 +41,7 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
 .hl small{color:var(--mute);font-size:.8rem}
 .go{display:block;text-align:center;text-decoration:none;font-weight:800;color:#fff;background:#2447f5;border-radius:12px;padding:13px;margin-top:12px}
 .soon{color:var(--mute);line-height:1.5;margin:4px 0 0}
+#tip{position:fixed;z-index:9;pointer-events:none;display:none;font:600 13px system-ui,sans-serif;padding:6px 10px;background:rgba(10,15,33,.94);border-radius:8px;color:#fff;white-space:nowrap}
 .hint{position:fixed;z-index:5;left:16px;bottom:max(16px,env(safe-area-inset-bottom));color:var(--mute);font-size:.85rem;line-height:1.5;text-shadow:0 1px 8px #000;pointer-events:none}
 .hint b{color:var(--ink)}
 .panel.on~.hint{display:none}
@@ -61,6 +62,7 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
  <div class="logo"><div class="flag"><i></i><i></i><i></i></div>Monde Info</div>
  <div class="sbox"><input id="q" type="search" placeholder="Chercher un pays…" aria-label="Chercher un pays" autocomplete="off"><div id="sug" role="listbox"></div></div>
 </div>
+<div id="tip"></div>
 <div class="panel" id="panel" role="dialog" aria-label="Infos du pays"></div>
 <div class="hint" id="hint"><b>Fais tourner, zoome</b> (molette ou deux doigts) et clique sur un pays.<br><span id="quakes">Disponible pour l’instant : la France. Les autres pays arrivent.</span></div>
 <div id="err"><div><h2>Le globe n’a pas pu se charger</h2><p>Vérifie ta connexion ou essaie un autre navigateur.</p><p><a href="france.html">Ouvrir directement la France →</a></p></div></div>
@@ -151,7 +153,7 @@ function buildSky(){
  if(!SKY.on&&!reduce){SKY.on=true;requestAnimationFrame(tickSky)}}
 function tickSky(ts){
  requestAnimationFrame(tickSky);
- if(document.hidden||ts-SKY.last<33)return;SKY.last=ts;
+ if(document.hidden||SKY.off||ts-SKY.last<33)return;SKY.last=ts;
  var c=el("twk").getContext("2d");c.setTransform(SKY.dpr,0,0,SKY.dpr,0,0);c.clearRect(0,0,SKY.w,SKY.h);
  SKY.tw.forEach(function(s){var a=.15+.6*(.5+.5*Math.sin(ts/1000*s.sp+s.ph));c.fillStyle="rgba("+s.t+","+a.toFixed(2)+")";c.beginPath();c.arc(s.x,s.y,s.r*1.1,0,6.2832);c.fill()})}
 var rsz=null;addEventListener("resize",function(){clearTimeout(rsz);rsz=setTimeout(function(){if(SKY.w)buildSky()},200)});
@@ -167,6 +169,68 @@ function afterInit(c){
  try{c.minDistance=118;c.maxDistance=520;c.dampingFactor=.07;c.zoomSpeed=.7;c.rotateSpeed=.8;
   c.addEventListener("change",function(){var d=G.camera().position.length();c.rotateSpeed=Math.max(.12,Math.min(.9,(d-100)/230))})}catch(e){}}
 
+
+/* ---------- détection du pays sous la souris (calcul léger, sans tester les formes 3D) ---------- */
+function inRing(x,y,r){var c=false;for(var i=0,j=r.length-1;i<r.length;j=i++){var xi=r[i][0],yi=r[i][1],xj=r[j][0],yj=r[j][1];if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi))c=!c}return c}
+function parts(f){
+ if(f.__p)return f.__p;var g=f.geometry,out=[];
+ if(g){(g.type==="Polygon"?[g.coordinates]:g.coordinates).forEach(function(pl){
+  var r=pl[0],x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;r.forEach(function(c){if(c[0]<x0)x0=c[0];if(c[0]>x1)x1=c[0];if(c[1]<y0)y0=c[1];if(c[1]>y1)y1=c[1]});
+  out.push({pl:pl,b:[x0,y0,x1,y1]})})}
+ f.__p=out;return out}
+function hit(lat,lng){
+ for(var i=0;i<feats.length;i++){var ps=parts(feats[i]);
+  for(var k=0;k<ps.length;k++){var p=ps[k],b=p.b;
+   if(lng<b[0]||lng>b[2]||lat<b[1]||lat>b[3])continue;
+   if(!inRing(lng,lat,p.pl[0]))continue;
+   var hole=false;for(var h=1;h<p.pl.length;h++)if(inRing(lng,lat,p.pl[h])){hole=true;break}
+   if(!hole)return feats[i]}}
+ return null}
+function ownPicking(){
+ var box=el("globe"),tip=el("tip"),last=0,down=null;
+ box.addEventListener("pointermove",function(e){
+  if(e.buttons){tip.style.display="none";return}
+  var now=performance.now();if(now-last<70)return;last=now;
+  var c=G.toGlobeCoords(e.clientX,e.clientY),f=c?hit(c.lat,c.lng):null;
+  if(f!==hov){hov=f;repaint()}
+  box.style.cursor=f?"pointer":"grab";
+  if(f){tip.textContent=flag(f)+" "+nm(f)+" – "+(isFR(f)?"disponible":"bientôt");tip.style.left=(e.clientX+14)+"px";tip.style.top=(e.clientY+14)+"px";tip.style.display="block"}else tip.style.display="none"});
+ box.addEventListener("pointerleave",function(){tip.style.display="none";if(hov){hov=null;repaint()}});
+ box.addEventListener("pointerdown",function(e){down={x:e.clientX,y:e.clientY,t:Date.now()}});
+ box.addEventListener("pointerup",function(e){
+  if(!down)return;var d=Math.hypot(e.clientX-down.x,e.clientY-down.y),dt=Date.now()-down.t;down=null;
+  if(d>6||dt>500)return;
+  var c=G.toGlobeCoords(e.clientX,e.clientY),f=c?hit(c.lat,c.lng):null;
+  if(f)pick(f);else if(sel)closeP()})}
+
+/* ---------- allègement des frontières détaillées (même aspect, beaucoup moins de points) ---------- */
+function dp(pts,tol){var n=pts.length;if(n<5)return pts;var keep=new Uint8Array(n);keep[0]=keep[n-1]=1;var st=[[0,n-1]];
+ while(st.length){var s=st.pop(),a=s[0],b=s[1],md=0,mi=-1,ax=pts[a][0],ay=pts[a][1],dx=pts[b][0]-ax,dy=pts[b][1]-ay,L=dx*dx+dy*dy;
+  for(var i=a+1;i<b;i++){var px=pts[i][0]-ax,py=pts[i][1]-ay,d;
+   if(L===0)d=px*px+py*py;else{var t=Math.max(0,Math.min(1,(px*dx+py*dy)/L)),qx=px-t*dx,qy=py-t*dy;d=qx*qx+qy*qy}
+   if(d>md){md=d;mi=i}}
+  if(md>tol*tol&&mi>0){keep[mi]=1;st.push([a,mi],[mi,b])}}
+ var out=[];for(var k=0;k<n;k++)if(keep[k])out.push(pts[k]);return out}
+function simpPoly(pl,tol){var ex=dp(pl[0],tol);if(ex.length<4)return null;var o=[ex];for(var h=1;h<pl.length;h++){var r=dp(pl[h],tol);if(r.length>=4)o.push(r)}return o}
+function simplify(fs,tol){
+ fs.forEach(function(f){var g=f.geometry;if(!g)return;
+  if(g.type==="Polygon"){var p=simpPoly(g.coordinates,tol);if(p)g.coordinates=p;else f.geometry=null}
+  else{var m=g.coordinates.map(function(pl){return simpPoly(pl,tol)}).filter(Boolean);if(m.length)g.coordinates=m;else f.geometry=null}
+  f.__p=null});return fs}
+
+/* ---------- garde-fou : si l'affichage est trop lent, on allège tout seul ---------- */
+var LOD=null,slow=false;
+function degrade(){
+ if(slow)return;slow=true;
+ try{G.renderer().setPixelRatio(1)}catch(e){}
+ SKY.off=true;try{el("twk").style.display="none"}catch(e){}
+ try{if(typeof G.globeTileEngineUrl==="function")G.globeTileEngineUrl(null)}catch(e){}
+ try{G.atmosphereAltitude(.15)}catch(e){}
+ if(LOD)setFeats(LOD,true)}
+function perfGuard(){
+ setTimeout(function(){var n=0,t0=0,sum=0;
+  requestAnimationFrame(function f(ts){if(t0){sum+=ts-t0;n++}t0=ts;if(n<90)return requestAnimationFrame(f);if(sum/n>42)degrade()})},4500)}
+
 function initGlobe(){
  if(typeof Globe!=="function"){el("err").style.display="grid";return}
  try{
@@ -176,10 +240,7 @@ function initGlobe(){
    .atmosphereColor("#7fb2ff").atmosphereAltitude(.22)
    .polygonsData(feats.filter(function(f){return f.geometry}))
    .polygonCapColor(cap).polygonSideColor(function(){return"rgba(255,255,255,.03)"}).polygonStrokeColor(stroke)
-   .polygonAltitude(alt).polygonLabel(lab).polygonsTransitionDuration(250)
-   .onPolygonHover(function(f){hov=f;repaint();el("globe").style.cursor=f?"pointer":"grab"})
-   .onPolygonClick(pick)
-   .onGlobeClick(function(){if(sel)closeP()})
+   .polygonAltitude(alt).polygonsTransitionDuration(120)
    .ringsData([{lat:46.6,lng:2.4,fr:1}])
    .ringColor(function(d){return d.fr?function(t){return"rgba(120,150,255,"+(1-t)+")"}:function(t){return"rgba(255,111,132,"+(1-t)+")"}})
    .ringMaxRadius(function(d){return d.fr?4:Math.max(1.6,d.mag*.9)}).ringPropagationSpeed(2).ringRepeatPeriod(1500);
@@ -187,21 +248,25 @@ function initGlobe(){
   c.addEventListener("start",function(){c.autoRotate=false;clearTimeout(idle)});
   c.addEventListener("end",resume);
   G.pointOfView({lat:30,lng:10,altitude:1.9});afterInit(c);
+  if(typeof G.toGlobeCoords==="function")ownPicking();
+  else G.polygonLabel(lab).onPolygonHover(function(f){hov=f;repaint()}).onPolygonClick(pick).onGlobeClick(function(){if(sel)closeP()});
+  perfGuard();
   addEventListener("resize",function(){G.width(innerWidth).height(innerHeight)});
  }catch(e){el("err").style.display="grid"}}
 function fetchFirst(urls,i,ok,fail){
  if(i>=urls.length){if(fail)fail();return}
  fetch(urls[i]).then(function(r){return r.json()}).then(function(d){if(!d||!d.features)throw 0;ok(d)}).catch(function(){fetchFirst(urls,i+1,ok,fail)})}
-function setFeats(d){
+function setFeats(d,keepLow){
  var keep=sel&&sel.properties&&sel.properties.ADMIN;
  feats=d.features.filter(function(f){return f.properties&&f.properties.ADMIN!=="Antarctica"});
+ if(d.__hi&&!keepLow)simplify(feats,.02);
  sel=null;hov=null;
  if(keep){sel=feats.filter(function(f){return f.properties.ADMIN===keep})[0]||null}
  if(G){G.polygonsData(feats);repaint()}}
 function loadGeo(){
  var save=false;try{save=!!(navigator.connection&&navigator.connection.saveData)}catch(e){}
- var up=function(){if(!save)fetchFirst(GEO_HI,0,setFeats)};
- fetchFirst(GEO_LO,0,function(d){setFeats(d);up()},up)}
+ var up=function(){if(!save&&!slow)fetchFirst(GEO_HI,0,function(d){if(!slow){d.__hi=1;setFeats(d)}})};
+ fetchFirst(GEO_LO,0,function(d){LOD=JSON.parse(JSON.stringify(d));setFeats(d);up()},up)}
 function loadQuakes(){
  fetch("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson").then(function(r){return r.json()}).then(function(d){
   var q=d.features.slice(0,40).map(function(f){return{lat:f.geometry.coordinates[1],lng:f.geometry.coordinates[0],mag:f.properties.mag||4.5}});
