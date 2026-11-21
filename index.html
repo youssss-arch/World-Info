@@ -68,7 +68,8 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
 <script src="https://cdn.jsdelivr.net/npm/globe.gl@2/dist/globe.gl.min.js" onerror="window.__noglobe=1"></script>
 <script>
 var IMG="https://cdn.jsdelivr.net/npm/three-globe/example/img/";
-var GEO=["https://cdn.jsdelivr.net/gh/vasturiano/globe.gl/example/datasets/ne_110m_admin_0_countries.geojson","https://raw.githubusercontent.com/vasturiano/globe.gl/master/example/datasets/ne_110m_admin_0_countries.geojson"];
+var GEO_LO=["https://cdn.jsdelivr.net/gh/vasturiano/globe.gl/example/datasets/ne_110m_admin_0_countries.geojson","https://raw.githubusercontent.com/vasturiano/globe.gl/master/example/datasets/ne_110m_admin_0_countries.geojson"];
+var GEO_HI=["https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_50m_admin_0_countries.geojson","https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson"];
 var FRF={type:"Feature",properties:{ADMIN:"France",NAME_FR:"France",ISO_A2:"FR"},geometry:null};
 var G=null,feats=[FRF],sel=null,hov=null,NEWS=null,idle=null,sugList=[],sugI=-1;
 var el=function(id){return document.getElementById(id)};
@@ -76,7 +77,7 @@ function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;
 function norm(s){return(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase()}
 function isFR(f){return f&&f.properties&&f.properties.ADMIN==="France"}
 function nm(f){var p=f.properties;return p.NAME_FR||p.NAME_EN||p.NAME||p.ADMIN||"?"}
-function flag(f){var c=isFR(f)?"FR":f.properties.ISO_A2;if(!c||c.length!==2)return"🌐";return String.fromCodePoint.apply(null,c.toUpperCase().split("").map(function(x){return 127397+x.charCodeAt(0)}))}
+function flag(f){var p=f.properties,c=isFR(f)?"FR":(p.ISO_A2&&p.ISO_A2.length===2?p.ISO_A2:p.ISO_A2_EH);if(!c||c.length!==2)return"🌐";return String.fromCodePoint.apply(null,c.toUpperCase().split("").map(function(x){return 127397+x.charCodeAt(0)}))}
 function ago(iso){var m=Math.round((Date.now()-new Date(iso))/60000);if(m<1)return"à l’instant";if(m<60)return"il y a "+m+" min";var h=Math.round(m/60);if(h<24)return"il y a "+h+" h";return"il y a "+Math.round(h/24)+" j"}
 function center(f){
  if(isFR(f)||!f.geometry)return{lat:46.6,lng:2.4,alt:1.25};
@@ -87,7 +88,7 @@ function cap(f){
  if(isFR(f))return f===sel?"rgba(70,110,255,.55)":f===hov?"rgba(70,110,255,.45)":"rgba(36,71,245,.28)";
  return f===sel?"rgba(255,255,255,.26)":f===hov?"rgba(255,255,255,.15)":"rgba(255,255,255,0)"}
 function stroke(f){return isFR(f)?"rgba(160,190,255,.95)":"rgba(255,255,255,.3)"}
-function alt(f){return f===sel?.02:f===hov?.012:isFR(f)?.006:.003}
+function alt(f){return f===sel?.02:isFR(f)?.006:.003}
 function lab(f){return'<div style="font:600 13px system-ui,sans-serif;padding:6px 10px;background:rgba(10,15,33,.94);border-radius:8px;color:#fff">'+flag(f)+" "+esc(nm(f))+" – "+(isFR(f)?"disponible":"bientôt")+"</div>"}
 function repaint(){if(G)G.polygonCapColor(cap).polygonAltitude(alt)}
 function resume(){clearTimeout(idle);idle=setTimeout(function(){if(G&&!sel)G.controls().autoRotate=true},7000)}
@@ -188,16 +189,24 @@ function initGlobe(){
   G.pointOfView({lat:30,lng:10,altitude:1.9});afterInit(c);
   addEventListener("resize",function(){G.width(innerWidth).height(innerHeight)});
  }catch(e){el("err").style.display="grid"}}
-function loadGeo(i){
- if(i>=GEO.length){return}
- fetch(GEO[i]).then(function(r){return r.json()}).then(function(d){
-  feats=d.features.filter(function(f){return f.properties&&f.properties.ADMIN!=="Antarctica"});
-  if(G)G.polygonsData(feats)}).catch(function(){loadGeo(i+1)})}
+function fetchFirst(urls,i,ok,fail){
+ if(i>=urls.length){if(fail)fail();return}
+ fetch(urls[i]).then(function(r){return r.json()}).then(function(d){if(!d||!d.features)throw 0;ok(d)}).catch(function(){fetchFirst(urls,i+1,ok,fail)})}
+function setFeats(d){
+ var keep=sel&&sel.properties&&sel.properties.ADMIN;
+ feats=d.features.filter(function(f){return f.properties&&f.properties.ADMIN!=="Antarctica"});
+ sel=null;hov=null;
+ if(keep){sel=feats.filter(function(f){return f.properties.ADMIN===keep})[0]||null}
+ if(G){G.polygonsData(feats);repaint()}}
+function loadGeo(){
+ var save=false;try{save=!!(navigator.connection&&navigator.connection.saveData)}catch(e){}
+ var up=function(){if(!save)fetchFirst(GEO_HI,0,setFeats)};
+ fetchFirst(GEO_LO,0,function(d){setFeats(d);up()},up)}
 function loadQuakes(){
  fetch("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson").then(function(r){return r.json()}).then(function(d){
   var q=d.features.slice(0,40).map(function(f){return{lat:f.geometry.coordinates[1],lng:f.geometry.coordinates[0],mag:f.properties.mag||4.5}});
   if(G)G.ringsData([{lat:46.6,lng:2.4,fr:1}].concat(q));
   el("quakes").textContent="🌋 "+d.features.length+" séismes dans le monde (24 h) – disponible pour l’instant : la France."}).catch(function(){})}
 function loadNews(){fetch("news.json?"+Date.now()).then(function(r){return r.json()}).then(function(d){NEWS=d;if(sel&&isFR(sel))showPanel(sel)}).catch(function(){})}
-initGlobe();loadGeo(0);loadQuakes();loadNews();
+initGlobe();loadGeo();loadQuakes();loadNews();
 </script></body></html>
