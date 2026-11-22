@@ -41,6 +41,8 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
 .hl small{color:var(--mute);font-size:.8rem}
 .go{display:block;text-align:center;text-decoration:none;font-weight:800;color:#fff;background:#2447f5;border-radius:12px;padding:13px;margin-top:12px}
 .soon{color:var(--mute);line-height:1.5;margin:4px 0 0}
+#warn{position:fixed;z-index:12;left:50%;transform:translateX(-50%);top:118px;max-width:92vw;background:rgba(140,30,45,.94);color:#fff;font-size:.82rem;line-height:1.35;padding:8px 12px;border-radius:10px;display:none;text-align:center}
+@media(min-width:800px){#warn{top:80px}}
 #tip{position:fixed;z-index:9;pointer-events:none;display:none;font:600 13px system-ui,sans-serif;padding:6px 10px;background:rgba(10,15,33,.94);border-radius:8px;color:#fff;white-space:nowrap}
 .hint{position:fixed;z-index:5;left:16px;bottom:max(16px,env(safe-area-inset-bottom));color:var(--mute);font-size:.85rem;line-height:1.5;text-shadow:0 1px 8px #000;pointer-events:none}
 .hint b{color:var(--ink)}
@@ -64,6 +66,7 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
  <div class="sbox"><input id="q" type="search" placeholder="Chercher un pays…" aria-label="Chercher un pays" autocomplete="off"><div id="sug" role="listbox"></div></div>
 </div>
 <div id="tip"></div>
+<div id="warn"></div>
 <div class="panel" id="panel" role="dialog" aria-label="Infos du pays"></div>
 <div class="hint" id="hint"><b>Fais tourner, zoome</b> (molette ou deux doigts) et clique sur un pays.<br><span id="quakes">Disponible pour l’instant : la France. Les autres pays arrivent.</span><br><span id="qual"></span> <button id="qbtn" hidden>Réessayer la haute qualité</button></div>
 <div id="err"><div><h2>Le globe n’a pas pu se charger</h2><p>Vérifie ta connexion ou essaie un autre navigateur.</p><p><a href="france.html">Ouvrir directement la France →</a></p></div></div>
@@ -72,7 +75,8 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
 <script>
 var IMG="https://cdn.jsdelivr.net/npm/three-globe/example/img/";
 var GEO_LO=["https://cdn.jsdelivr.net/gh/vasturiano/globe.gl/example/datasets/ne_110m_admin_0_countries.geojson","https://raw.githubusercontent.com/vasturiano/globe.gl/master/example/datasets/ne_110m_admin_0_countries.geojson"];
-var GEO_HI=["https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_50m_admin_0_countries.geojson","https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson","https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_50m_admin_0_countries.geojson"];
+var GEO_HI=["https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json","https://unpkg.com/world-atlas@2/countries-50m.json","https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_50m_admin_0_countries.geojson","https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson","https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_50m_admin_0_countries.geojson"];
+var VER="v4";
 var FRF={type:"Feature",properties:{ADMIN:"France",NAME_FR:"France",ISO_A2:"FR"},geometry:null};
 var G=null,feats=[FRF],sel=null,hov=null,NEWS=null,idle=null,sugList=[],sugI=-1;
 var el=function(id){return document.getElementById(id)};
@@ -223,7 +227,10 @@ function simplify(fs,tol){
 var LOD=null,slow=false,HIS="attente",TILES=false,guarded=false,HIERR="";
 function updateQual(){
  var q=el("qual");if(!q)return;
- q.textContent="Frontières : "+(HIS==="ok"?"précises":HIS==="chargement"?"chargement…":"simples")+" – Satellite : "+(TILES?"HD":"standard")+(slow?" – mode léger":"")+(HIERR&&HIS!=="ok"?" ("+HIERR.slice(0,70)+")":"");
+ q.textContent=VER+" – Frontières : "+(HIS==="ok"?"précises":HIS==="chargement"?"chargement…":"simples")+" – Satellite : "+(TILES?"HD":"standard")+(slow?" – mode léger":"")+(HIERR&&HIS!=="ok"?" ("+HIERR.slice(0,70)+")":"");
+ var w=el("warn");
+ if(w){var bad=(HIS==="échec"||HIS==="erreur"||HIS==="économie"||HIS==="allégé");w.style.display=bad?"block":"none";
+  if(bad)w.textContent="Frontières détaillées non chargées ("+VER+") : "+(HIERR||({"échec":"téléchargement impossible","erreur":"erreur d’affichage","économie":"mode économie de données","allégé":"mode léger"}[HIS]))}
  var b=el("qbtn");if(b){b.hidden=!(HIS==="échec"||HIS==="erreur"||HIS==="allégé"||slow);b.onclick=retryHigh}}
 function degrade(){
  if(slow)return;slow=true;HIS="allégé";
@@ -283,9 +290,24 @@ function initGlobe(){
   updateQual();
   addEventListener("resize",function(){G.width(innerWidth).height(innerHeight)});
  }catch(e){el("err").style.display="grid"}}
+function topoToGeo(t){
+ var tr=t.transform,sc=tr?tr.scale:[1,1],tl=tr?tr.translate:[0,0];
+ var arcs=t.arcs.map(function(a){var x=0,y=0;return a.map(function(p){x+=p[0];y+=p[1];return[x*sc[0]+tl[0],y*sc[1]+tl[1]]})});
+ function arc(i){return i<0?arcs[~i].slice().reverse():arcs[i]}
+ function ring(ix){var r=[];ix.forEach(function(i,k){var a=arc(i);r=r.concat(k?a.slice(1):a)});return r}
+ var name=t.objects.countries?"countries":Object.keys(t.objects)[0];
+ var fs=t.objects[name].geometries.map(function(g){
+  var geom=g.type==="Polygon"?{type:"Polygon",coordinates:g.arcs.map(ring)}:g.type==="MultiPolygon"?{type:"MultiPolygon",coordinates:g.arcs.map(function(p){return p.map(ring)})}:null;
+  return{type:"Feature",id:g.id,properties:g.properties||{},geometry:geom}}).filter(function(f){return f.geometry});
+ enrich(fs);return{type:"FeatureCollection",features:fs}}
+function enrich(fs){
+ var by={};if(LOD)LOD.features.forEach(function(f){var p=f.properties;by[norm(p.ADMIN||"")]=p;by[norm(p.NAME||"")]=p});
+ fs.forEach(function(f){var p=f.properties||(f.properties={}),n=p.name||p.ADMIN;if(!n)return;var m=by[norm(n)];
+  if(m)for(var k in m)if(p[k]==null)p[k]=m[k];
+  p.ADMIN=(m&&m.ADMIN)||n;p.NAME=p.NAME||n})}
 function fetchFirst(urls,i,ok,fail){
  if(i>=urls.length){if(fail)fail();return}
- fetch(urls[i]).then(function(r){return r.json()}).then(function(d){if(!d||!d.features)throw 0;return d})
+ fetch(urls[i]).then(function(r){return r.json()}).then(function(d){if(d&&d.type==="Topology")d=topoToGeo(d);if(!d||!d.features)throw 0;return d})
   .then(function(d){try{ok(d)}catch(e){HIERR=String(e&&e.message||e);if(fail)fail()}},function(){fetchFirst(urls,i+1,ok,fail)})}
 function setFeats(d,keepLow){
  var keep=sel&&sel.properties&&sel.properties.ADMIN;
