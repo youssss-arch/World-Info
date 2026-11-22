@@ -258,13 +258,34 @@ def sport():
     return out
 
 
+# Villes affichées sur le globe (les premières sont les plus importantes)
+CITIES = [('Paris', 48.86, 2.35), ('New York', 40.71, -74.01), ('Londres', 51.51, -0.13), ('Tokyo', 35.68, 139.69), ('Moscou', 55.76, 37.62), ('Pékin', 39.9, 116.41), ('Delhi', 28.61, 77.21), ('Le Caire', 30.04, 31.24), ('São Paulo', -23.55, -46.63), ('Sydney', -33.87, 151.21), ('Los Angeles', 34.05, -118.24), ('Mexico', 19.43, -99.13), ('Lagos', 6.52, 3.38), ('Johannesburg', -26.2, 28.05), ('Dubaï', 25.2, 55.27), ('Berlin', 52.52, 13.4), ('Madrid', 40.42, -3.7), ('Rome', 41.9, 12.5), ('Istanbul', 41.01, 28.98), ('Bombay', 19.08, 72.88), ('Shanghai', 31.23, 121.47), ('Singapour', 1.35, 103.82), ('Séoul', 37.57, 126.98), ('Bangkok', 13.76, 100.5), ('Jakarta', -6.21, 106.85), ('Buenos Aires', -34.6, -58.38), ('Toronto', 43.65, -79.38), ('Washington', 38.91, -77.04), ('Nairobi', -1.29, 36.82), ('Riyad', 24.71, 46.68), ('Téhéran', 35.69, 51.39), ('Karachi', 24.86, 67.01), ('Dacca', 23.81, 90.41), ('Manille', 14.6, 120.98), ('Hong Kong', 22.32, 114.17), ('Le Cap', -33.92, 18.42), ('Casablanca', 33.57, -7.59), ('Lima', -12.05, -77.04), ('Bogota', 4.71, -74.07), ('Santiago', -33.45, -70.67), ('Kinshasa', -4.44, 15.27), ('Addis-Abeba', 9.03, 38.74), ('Kiev', 50.45, 30.52), ('Varsovie', 52.23, 21.01), ('Stockholm', 59.33, 18.07), ('Athènes', 37.98, 23.73), ('Lisbonne', 38.72, -9.14), ('Dublin', 53.35, -6.26), ('Oslo', 59.91, 10.75), ('Reykjavik', 64.15, -21.94), ('Anchorage', 61.22, -149.9), ('Honolulu', 21.31, -157.86), ('Auckland', -36.85, 174.76), ('Perth', -31.95, 115.86), ('Melbourne', -37.81, 144.96), ('Chicago', 41.88, -87.63), ('Houston', 29.76, -95.37), ('Miami', 25.76, -80.19), ('Vancouver', 49.28, -123.12), ('Montréal', 45.5, -73.57), ('La Havane', 23.11, -82.37), ('Caracas', 10.48, -66.9), ('Quito', -0.18, -78.47), ('La Paz', -16.5, -68.15), ('Montevideo', -34.9, -56.16), ('Rio de Janeiro', -22.91, -43.17), ('Brasília', -15.79, -47.88), ('Panama', 8.98, -79.52), ('Alger', 36.75, 3.06), ('Tunis', 36.81, 10.18), ('Tripoli', 32.89, 13.19), ('Dakar', 14.72, -17.47), ('Accra', 5.6, -0.19), ('Abidjan', 5.36, -4.01), ('Luanda', -8.84, 13.23), ('Dar es Salaam', -6.79, 39.21), ('Khartoum', 15.5, 32.56), ('Bagdad', 33.31, 44.36), ('Jérusalem', 31.77, 35.21), ('Kaboul', 34.53, 69.17), ('Tachkent', 41.3, 69.24), ('Almaty', 43.24, 76.89), ('Oulan-Bator', 47.89, 106.91), ('Katmandou', 27.72, 85.32), ('Colombo', 6.93, 79.86), ('Rangoun', 16.84, 96.17), ('Hanoï', 21.03, 105.85), ('Kuala Lumpur', 3.14, 101.69), ('Taipei', 25.03, 121.57), ('Wellington', -41.29, 174.78), ('Port Moresby', -9.44, 147.18), ('Nuuk', 64.18, -51.72), ('Vienne', 48.21, 16.37), ('Bruxelles', 50.85, 4.35), ('Amsterdam', 52.37, 4.9), ('Copenhague', 55.68, 12.57), ('Helsinki', 60.17, 24.94), ('Prague', 50.08, 14.44), ('Budapest', 47.5, 19.04), ('Bucarest', 44.43, 26.1), ('Marseille', 43.3, 5.37), ('Lyon', 45.76, 4.84), ('Lille', 50.63, 3.06), ('Toulouse', 43.6, 1.44), ('Bordeaux', 44.84, -0.58), ('Nantes', 47.22, -1.55), ('Strasbourg', 48.58, 7.75), ('Nice', 43.7, 7.26), ('Fort-de-France', 14.6, -61.07), ('Cayenne', 4.94, -52.33), ('Saint-Denis (La Réunion)', -20.88, 55.45), ('Nouméa', -22.27, 166.46), ('Papeete', -17.54, -149.57)]
+
+def globe_temps():
+    out = []
+    for i in range(0, len(CITIES), 40):
+        chunk = CITIES[i:i + 40]
+        u = ("https://api.open-meteo.com/v1/forecast?latitude=%s&longitude=%s"
+             "&current=temperature_2m,weather_code,wind_speed_10m&timezone=auto"
+             % (",".join(str(c[1]) for c in chunk), ",".join(str(c[2]) for c in chunk)))
+        d = j(u)
+        if isinstance(d, dict):
+            d = [d]
+        for k, (c, r) in enumerate(zip(chunk, d)):
+            cur = r.get("current") or {}
+            if cur.get("temperature_2m") is None:
+                continue
+            out.append({"n": c[0], "lat": c[1], "lng": c[2], "t": round(cur["temperature_2m"]),
+                        "c": wmo(cur.get("weather_code") or 0), "w": round(cur.get("wind_speed_10m") or 0), "p": i + k})
+    return {"updated": dt.datetime.now(dt.timezone.utc).isoformat(), "cities": out}
+
 if __name__ == "__main__":
     p = PAYS[0]
     data = {"updated": dt.datetime.now(dt.timezone.utc).isoformat(), "country": p["name"],
             "items": news(p), "meteo": weather(p), "crypto": crypto(),
             "rappels": safe(rappels, []), "seismes": safe(seismes, []), "elec": safe(electricite, None),
             "change": safe(change, None), "rivieres": safe(rivieres, []), "wiki": safe(wiki, []),
-            "sport": safe(sport, None)}
+            "sport": safe(sport, None), "globe": safe(globe_temps, None)}
     with open("news.json", "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False)
     print(len(data["items"]), "infos écrites")
