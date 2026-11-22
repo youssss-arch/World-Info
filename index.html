@@ -72,7 +72,7 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
 <script>
 var IMG="https://cdn.jsdelivr.net/npm/three-globe/example/img/";
 var GEO_LO=["https://cdn.jsdelivr.net/gh/vasturiano/globe.gl/example/datasets/ne_110m_admin_0_countries.geojson","https://raw.githubusercontent.com/vasturiano/globe.gl/master/example/datasets/ne_110m_admin_0_countries.geojson"];
-var GEO_HI=["https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_50m_admin_0_countries.geojson","https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson"];
+var GEO_HI=["https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_50m_admin_0_countries.geojson","https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson","https://d2ad6b4ur7yvpq.cloudfront.net/naturalearth-3.3.0/ne_50m_admin_0_countries.geojson"];
 var FRF={type:"Feature",properties:{ADMIN:"France",NAME_FR:"France",ISO_A2:"FR"},geometry:null};
 var G=null,feats=[FRF],sel=null,hov=null,NEWS=null,idle=null,sugList=[],sugI=-1;
 var el=function(id){return document.getElementById(id)};
@@ -212,7 +212,7 @@ function dp(pts,tol){var n=pts.length;if(n<5)return pts;var keep=new Uint8Array(
    if(d>md){md=d;mi=i}}
   if(md>tol*tol&&mi>0){keep[mi]=1;st.push([a,mi],[mi,b])}}
  var out=[];for(var k=0;k<n;k++)if(keep[k])out.push(pts[k]);return out}
-function simpPoly(pl,tol){var ex=dp(pl[0],tol);if(ex.length<4)return null;var o=[ex];for(var h=1;h<pl.length;h++){var r=dp(pl[h],tol);if(r.length>=4)o.push(r)}return o}
+function simpPoly(pl,tol){var ex=dp(pl[0],tol);var o=[ex.length>=4?ex:pl[0]];for(var h=1;h<pl.length;h++){var r=dp(pl[h],tol);if(r.length>=4)o.push(r)}return o}
 function simplify(fs,tol){
  fs.forEach(function(f){var g=f.geometry;if(!g)return;
   if(g.type==="Polygon"){var p=simpPoly(g.coordinates,tol);if(p)g.coordinates=p;else f.geometry=null}
@@ -220,11 +220,11 @@ function simplify(fs,tol){
   f.__p=null});return fs}
 
 /* ---------- garde-fou : si l'affichage est trop lent, on allège tout seul ---------- */
-var LOD=null,slow=false,HIS="attente",TILES=false,guarded=false;
+var LOD=null,slow=false,HIS="attente",TILES=false,guarded=false,HIERR="";
 function updateQual(){
  var q=el("qual");if(!q)return;
- q.textContent="Frontières : "+(HIS==="ok"?"précises":HIS==="chargement"?"chargement…":"simples")+" – Satellite : "+(TILES?"HD":"standard")+(slow?" – mode léger":"");
- var b=el("qbtn");if(b){b.hidden=!(HIS==="échec"||HIS==="allégé"||slow);b.onclick=retryHigh}}
+ q.textContent="Frontières : "+(HIS==="ok"?"précises":HIS==="chargement"?"chargement…":"simples")+" – Satellite : "+(TILES?"HD":"standard")+(slow?" – mode léger":"")+(HIERR&&HIS!=="ok"?" ("+HIERR.slice(0,70)+")":"");
+ var b=el("qbtn");if(b){b.hidden=!(HIS==="échec"||HIS==="erreur"||HIS==="allégé"||slow);b.onclick=retryHigh}}
 function degrade(){
  if(slow)return;slow=true;HIS="allégé";
  try{G.renderer().setPixelRatio(1)}catch(e){}
@@ -244,16 +244,21 @@ function perfGuard(){
   requestAnimationFrame(function f(ts){if(t0)ds.push(ts-t0);t0=ts;if(ds.length<90)return requestAnimationFrame(f);
    ds.sort(function(x,y){return x-y});if(ds[45]>70)degrade()})},3000)}
 function swapProgressive(d){
- var hi=d.features.filter(function(f){return f.properties&&f.properties.ADMIN!=="Antarctica"});
+ var hi=d.features.filter(function(f){return f.properties&&f.properties.ADMIN!=="Antarctica"&&f.geometry});
  simplify(hi,.02);
  var keep=sel&&sel.properties&&sel.properties.ADMIN,names={},i=0,STEP=24,lo=feats;
  (function step(){
   if(slow)return;
-  var part=hi.slice(0,i+STEP);i+=STEP;
-  part.forEach(function(f){names[f.properties.ADMIN]=1});
-  feats=i>=hi.length?hi:part.concat(lo.filter(function(f){return!names[f.properties.ADMIN]}));
-  sel=keep?(feats.filter(function(f){return f.properties.ADMIN===keep})[0]||null):null;hov=null;
-  if(G){G.polygonsData(feats);repaint()}
+  try{
+   var part=hi.slice(0,i+STEP);i+=STEP;
+   part.forEach(function(f){names[f.properties.ADMIN]=1});
+   feats=i>=hi.length?hi:part.concat(lo.filter(function(f){return!names[f.properties.ADMIN]}));
+   sel=keep?(feats.filter(function(f){return f.properties.ADMIN===keep})[0]||null):null;hov=null;
+   if(G){G.polygonsData(feats.filter(function(f){return f.geometry}));repaint()}
+  }catch(e){
+   HIERR=String(e&&e.message||e);HIS="erreur";feats=lo;sel=null;
+   try{if(G)G.polygonsData(lo.filter(function(f){return f.geometry}))}catch(_){}
+   updateQual();return}
   if(i<hi.length)setTimeout(step,60);else{HIS="ok";updateQual();perfGuard()}})()}
 
 function initGlobe(){
@@ -280,14 +285,15 @@ function initGlobe(){
  }catch(e){el("err").style.display="grid"}}
 function fetchFirst(urls,i,ok,fail){
  if(i>=urls.length){if(fail)fail();return}
- fetch(urls[i]).then(function(r){return r.json()}).then(function(d){if(!d||!d.features)throw 0;ok(d)}).catch(function(){fetchFirst(urls,i+1,ok,fail)})}
+ fetch(urls[i]).then(function(r){return r.json()}).then(function(d){if(!d||!d.features)throw 0;return d})
+  .then(function(d){try{ok(d)}catch(e){HIERR=String(e&&e.message||e);if(fail)fail()}},function(){fetchFirst(urls,i+1,ok,fail)})}
 function setFeats(d,keepLow){
  var keep=sel&&sel.properties&&sel.properties.ADMIN;
  feats=d.features.filter(function(f){return f.properties&&f.properties.ADMIN!=="Antarctica"});
  if(d.__hi&&!keepLow)simplify(feats,.02);
  sel=null;hov=null;
  if(keep){sel=feats.filter(function(f){return f.properties.ADMIN===keep})[0]||null}
- if(G){G.polygonsData(feats);repaint()}}
+ if(G){G.polygonsData(feats.filter(function(f){return f.geometry}));repaint()}}
 function loadGeo(){
  var save=false;try{save=!!(navigator.connection&&navigator.connection.saveData)}catch(e){}
  var up=function(){
